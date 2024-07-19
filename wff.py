@@ -13,6 +13,8 @@ class op:
         self.v2 = val2
         self.opSymbol = None
 
+    aryness = 2
+
     def wff(self):
         return f'({self.v1.wff()}){self.opSymbol}({self.v2.wff()})'
 
@@ -44,6 +46,8 @@ class opNot(op):
     def __init__(self, val1):
         op.__init__(self, val1, None)
         self.opSymbol = '¬'
+    
+    aryness = 1
 
     def __repr__(self):
         return f'{self.opSymbol}({self.v1})'
@@ -55,15 +59,24 @@ class opAnd(op):
     def __init__(self, val1, val2):
         op.__init__(self, val1, val2)
         self.opSymbol = '∧'
+class opIf(op):
+    def __init__(self, val1, val2):
+        op.__init__(self, val1, val2)
+        self.opSymbol = '⇒'
+class opImp(op):
+    def __init__(self, val1, val2):
+        op.__init__(self, val1, val2)
+        self.opSymbol = '⇔'
 class opVar(op):
     def __init__(self, name, value=None):
         op.__init__(self, None, None)
         self.name = name
         self.value = value
+    
+    aryness = 1
 
     def __repr__(self):
         return self.name
-
 
 def tokenizer(string):
     o = []
@@ -92,7 +105,6 @@ def tokenizer(string):
 def parser(tokens):
     # Parens
     tokens = [parser(tok) if isinstance(tok, list) else tok for tok in tokens]
-    
     # Not
     index = 0
     cont = True
@@ -100,10 +112,28 @@ def parser(tokens):
         cont = False
         for i, tok in enumerate(tokens):
             if tok == '¬':
-                tokens = tokens[:i] + [opNot(tokens[i + 1])] + tokens[i + 2:]
-
+                tokens = tokens 
 
     return tokens
+
+
+def shuntingYard(tokens):
+    precedence {'¬': 1, '∧': 2, '∨': 3, '∀': 4, '∃': 5, '⇒': 6, '⇔': 7}
+    
+
+
+def evalReversePolish(rp):
+    operationFromTok = {'¬': opNot, '∧': opAnd, '∨': opOr, '⇒': opIf, '⇔': opImp}
+    
+    stack = []
+    for tok in rp:
+        if tok in operatorTokens:
+            oper = operationFromTok(tok)
+            ary = oper.aryness
+            stack = stack[:-ary] + [operationFromTok(tok)(stack[-ary:])
+        else:
+            stack.append(tok)
+    return stack[-1]
 
 
 test_L = '¬p∧¬q⇔¬(p∨q)'
