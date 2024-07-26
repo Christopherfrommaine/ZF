@@ -3,7 +3,7 @@ whitespaceTokens = ' \n'
 breakOnChars = operatorTokens + whitespaceTokens + '()[]{}'
 operatorPrecedence = {opSymbol: i for i, opSymbol in enumerate(operatorTokens)} 
 
-print('here are some helpful charachters for building logical statements: \n ' + operatorTokens)
+print('here are some helpful charachters for building logical statements: \n ' + operatorTokens + '\n')
 
 class op:
     def __init__(self, val1, val2):
@@ -33,6 +33,33 @@ class op:
         return self.__or__(other)
     def __rand__(self, other):
         return self.__and__(other)
+    
+    def visualEquals(self, other):
+        return str(self) == str(other)
+    def recursiveEquals(self, other):
+        if self.arity != other.arity:
+            return opVar(False)
+        
+        match self.arity:
+            case 1:
+                return self.v1.recursiveEquals(other.v1)
+            case 2:
+                return self.v1.recursiveEquals(other.v1) and self.v2.recursiveEquals(other.v2)
+            case _:
+                pass
+
+    def simplify(self):
+        if hasattr(self, "simplifyStep"):
+            return op.simplify(self.simplifyStep())
+
+        match self.arity:
+            case 1:
+                return type(self)(self.v1.simplify())
+            case 2:
+                return type(self)(self.v1.simplify(), self.v2.simplify())
+            case _:
+                return self
+
 class opNot(op):
     def __init__(self, val1):
         op.__init__(self, val1, None)
@@ -40,10 +67,66 @@ class opNot(op):
     symbol = '¬'
     arity = 1
 
+    def simplifyStep(self):
+        # Double Negation
+        if isinstance(self.v1, opNot):
+            return self.v1.v1
+        
+        # DeMorgan's laws
+        elif isinstance(self.v1, opAnd):
+            if isinstance(self.v1.v1, opNot) and isinstance(self.v1.v2, opNot):
+                return opOr(self.v1.v1.v1, self.v1.v2.v1)
+        elif isinstance(self.v1, opOr):
+            if isinstance(self.v1.v1, opNot) and isinstance(self.v1.v2, opNot):
+                return opAnd(self.v1.v1.v1, self.v1.v2.v1)
+        
+        # Negation Laws
+        elif isinstance(self.v1, opFA):
+            if isinstance(self.v1.v2, opNot):
+                return opTE(self.v1.v1, self.v1.v2.v1)
+        elif isinstance(self.v1, opTE):
+            if isinstance(self.v1.v2, opNot):
+                return opFA(self.v1.v1, self.v1.v2.v1)
+        
+        # Evaluate
+        elif isinstance(self.v1, opVar):
+            if self.v1.value is not None:
+                return opVar(str(not self.v1.value))
+        
+        return self
+
 class opOr(op):
     symbol = '∨'
+
+    def simplifyStep(self):
+        if isinstance(self.v1, opVar) and self.v1.value is not None:
+            if self.v1.value:
+                return opVar(True)
+            else:
+                return self.v2
+        if isinstance(self.v2, opVar) and self.v2.value is not None:
+            if self.v2.value:
+                return opVar(True)
+            else:
+                return self.v1
+
+        return self
 class opAnd(op):
     symbol = '∧'
+
+    def simplifyStep(self):
+        if isinstance(self.v1, opVar) and self.v1.value is not None:
+            if self.v1.value:
+                return self.v2
+            else:
+                return opVar(False)
+        if isinstance(self.v2, opVar) and self.v2.value is not None:
+            if self.v2.value:
+                return self.v1
+            else:
+                return opVar(False)
+
+        return self
 class opXor(op):
     symbol = '⊻'
 class opFA(op):
@@ -54,8 +137,17 @@ class opIf(op):
     symbol = '⇒'
 class opImp(op):
     symbol = '⇔'
+
+    def simplifyStep(self):
+        if self.v1.recursiveEquals(self.v2):
+            return opVar(True)
+        return self
+
 class opVar(op):
     def __init__(self, name, value=None):
+        if name == False or name == True:
+            opVar.__init__(self, str(name), value)
+
         op.__init__(self, None, None)
         self.name = name
         self.value = value
@@ -69,6 +161,14 @@ class opVar(op):
 
     def __repr__(self):
         return self.name
+
+    def recursiveEquals(self, other):
+        if not isinstance(other, opVar):
+            return False
+        return self.name == other.name
+
+    def simplify(self):
+        return self
 
 opFromTok = {'¬': opNot, '!': opNot, '∧': opAnd, '&': opAnd, '∨': opOr, '|': opOr, '⊻': opXor, '^': opXor, '∀': opFA, '∃': opTE, '⇒': opIf, '⇔': opImp, '=': opImp} 
 
@@ -121,15 +221,10 @@ def ASTfromRP(tokens):
         raise Exception("Too few operators")
     return solveStack[0]
 
-
-test_L = '¬p∧¬q⇔¬(p∨q)'
-test_tokens = tokenize(test_L)
-print(test_tokens)
-
-test_L = ' ¬p  ∧\n¬ q        ⇔¬ (                          p \n\n\n\n∨q)'
-test_tokens = tokenize(test_L)
-print(test_tokens)
-
-print(shuntingYard(test_tokens))
-print(ASTfromRP(shuntingYard(test_tokens)))
-
+if __name__ == '__main__':
+    test_L = ' ¬(¬p  ∧\n¬ q )       ⇔¬     ¬ (                          p \n\n\n\n∨q)'
+    test_tokens = tokenize(test_L)
+    test_RP = shuntingYard(test_tokens)
+    test_AST = ASTfromRP(test_RP)
+    print(test_AST)
+    print(test_AST.simplify())
